@@ -1,0 +1,31 @@
+<Configuration>
+  <ViewDefinitions>
+    <View>
+        <Name>GitLogEntry</Name>
+        <ViewSelectedBy><TypeName>GitLogEntry</TypeName></ViewSelectedBy>
+        <TableControl>
+            <TableHeaders>
+                <TableColumnHeader>
+                    <Label>Commit</Label>
+                    <Width>8</Width>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>Title</Label>
+                </TableColumnHeader>
+            </TableHeaders>
+            <TableRowEntries>
+                <TableRowEntry>
+                    <TableColumnItems>
+                        <TableColumnItem>
+                            <ScriptBlock>$_.Commit.Substring(0, 7)</ScriptBlock>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <PropertyName>Title</PropertyName>
+                        </TableColumnItem>
+                    </TableColumnItems>
+                </TableRowEntry>
+            </TableRowEntries>
+        </TableControl>
+    </View>
+  </ViewDefinitions>  
+</Configuration>

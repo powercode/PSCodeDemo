@@ -15,35 +15,44 @@ Describe 'GitLog' {
     }
 }
 
-
 Describe 'CodeDemo' {
-    BeforeEach{
+    BeforeAll {
         Mkdir TestDrive:\DemoRepo | Out-Null
     }
+
     It 'Starts-Demo' {
         InModuleScope -ModuleName:PSCodeDemo {
-            mock -CommandName:git -ParameterFilter {$args[2] -eq 'log'} -MockWith:{
+            mock -CommandName:git -ParameterFilter { $args[2] -eq 'log' } -MockWith: {
                 Get-Content -LiteralPath:"$psscriptroot\gitlog.txt"
             } -Verifiable
-            mock -CommandName:git -ParameterFilter {$args[2] -eq 'tag'} -MockWith:{
+            mock -CommandName:git -ParameterFilter { $args[2] -eq 'tag' } -MockWith: {
                 Get-Content -LiteralPath:"$psscriptroot\gittag.txt"
             } -Verifiable
-            mock -CommandName:git -ParameterFilter {$args[3] -eq 'switch'} -MockWith {
+            mock -CommandName:git -ParameterFilter { $args[2] -eq 'rev-parse' } -MockWith: {
+                "main"
+            }
+
+            mock -CommandName:git -ParameterFilter { $args[3] -eq 'switch' -and $args[5] -eq 'demo' } -MockWith {
 
             } -Verifiable
-            mock -CommandName:git -ParameterFilter {$args[3] -eq 'checkout'} -MockWith {
+            mock -CommandName:git -ParameterFilter { $args[3] -eq 'checkout' } -MockWith {
 
             } -Verifiable
             mock -CommandName:git -MockWith {
-                throw ('git command not mocked: {0}' -f $args)
+                throw "git command not mocked: $args"
             }
             Start-CodeDemo -RepositoryPath "$psscriptroot\DemoRepo" -WorkTree:TestDrive:\DemoRepo
             $demoLog = $script:DemoState.DemoCommits
             $demoLog.Count | Should -be 4
             $demoState.GetCurrentCommit() | Should -BeExactly '52273a3a57f53b3e05b47b1bf82fb9fd6ee9ca97'
-            
-            Should -Invoke -CommandName:git -ParameterFilter {$args[3] -eq 'switch'} -Times:1
-            Should -Invoke -CommandName:git -ParameterFilter {$args[3] -eq 'checkout' -and ($args[5] -eq '52273a3a57f53b3e05b47b1bf82fb9fd6ee9ca97')} -Times:1
+
+            Should -Invoke -CommandName:git -ParameterFilter { $args[3] -eq 'switch' } -Times:1
+            Should -Invoke -CommandName:git -ParameterFilter { $args[3] -eq 'checkout' -and ($args[5] -eq '52273a3a57f53b3e05b47b1bf82fb9fd6ee9ca97') } -Times:1
         }
     }
+}
+
+function Stop-CodeDemo {
+    $state = $script.DemoState
+    git switch -f $state.OriginalBranch
 }

@@ -1,4 +1,13 @@
 
+function git {
+    Write-Verbose "git $args"
+    git.exe $args
+    if ($LASTEXITCODE){
+        throw "git $args failed with exit code $LASTEXITCODE"
+    }
+}
+
+
 class GitLogEntry {
     [string] $Commit
     [string] $Title
@@ -13,7 +22,7 @@ class GitLogEntry {
 
     static [GitLogEntry[]] GetLogEntries([string] $Path){
         $entries = @(
-            foreach ($line in git -C $path log --format='%H%x00%s%x00%f%x00%an%x00%ae%aI'){
+            foreach ($line in git -C $path log --format='%H%x00%s%x00%f%x00%an%x00%ae%x00%aI'){
                 $local:commit, $local:title, $local:fullMessage, $local:author, $local:authorEmail, $local:date = $line -split '\x00'
                 [GitLogEntry] @{
                     Title = $title
@@ -36,8 +45,6 @@ class GitLogEntry {
         }
         return -1
     }
-
-    
 }
 
 class GitTagEntry{
@@ -63,13 +70,14 @@ class PSCodeDemo {
     [string] $WorkTree
     [GitLogEntry[]] $DemoCommits
     [int] $CurrentCommitIndex
+    [string] $OriginalBranch
 
     [void] CreateDemoBranch() {
         git -C $this.RepositoryPath switch -C demo
     }
 
-    [string] GetCurrentCommit(){
-        return $this.DemoCommits[$this.CurrentCommitIndex].Commit
+    [GitLogEntry] GetCurrentCommit(){
+        return $this.DemoCommits[$this.CurrentCommitIndex]
     }
 
     [void] SwitchToDemoBranch() {
@@ -77,31 +85,30 @@ class PSCodeDemo {
     }
 
     [GitLogEntry] CheckoutCurrentCommit(){
-        $currentObject = $this.DemoCommits[$this.CurrentCommitIndex]
-        git --work-tree=$this.WorkTree -C $this.RepositoryPath checkout -f $currentObject.Commit
+        $currentObject = $this.GetCurrentCommit()
+        $output = git --work-tree=$($this.WorkTree) -C $this.RepositoryPath checkout -f $currentObject.Commit
         return $currentObject
     }
 
-    [int] Next() {
+    [GitLogEntry] Next() {
         if ($this.CurrentCommitIndex -lt ($this.DemoCommits.Count - 1)){
             $this.CurrentCommitIndex++
-            $this.CheckoutCurrentCommit()
+             $this.CheckoutCurrentCommit()
         }
-
-        return $this.CurrentCommitIndex;
+        return $this.GetCurrentCommit()
     }
 
-    [int] Previous(){
+    [GitLogEntry] Previous(){
         if ($this.CurrentCommitIndex -gt 0){
             $this.CurrentCommitIndex--
             $this.CheckoutCurrentCommit()
         }
 
-        return $this.CurrentCommitIndex;
+        return $this.GetCurrentCommit()
     }
 
     [string] ToString() {
-        $current = $this.DemoCommits[$this.CurrentCommitIndex]
+        $current = $this.GetCurrentCommit()
         return "Demo on $($current.ToString())"
     }
 }
@@ -118,6 +125,7 @@ function New-DemoState{
 
     $tags = [GitTagEntry]::GetTagEntries($RepositoryPath)
     $log = [GitLogEntry]::GetLogEntries($RepositoryPath)
+    $currentBranch = git rev-parse --abbrev-ref HEAD
     if ($log.Count -lt 2){
         Write-Error "The repository must have at least two commits to start a demo."
         return
@@ -141,6 +149,7 @@ function New-DemoState{
         WorkTree = $WorkTree
         DemoCommits = $demoLog
         CurrentCommitIndex = 0
+        OriginalBranch = $currentBranch
     }
 
     $demoState
@@ -173,6 +182,7 @@ function Start-CodeDemo {
     )
 
     $workTree = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($WorkTree)
+    $RepositoryPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($RepositoryPath)
     if (-not (Test-Path -PathType:Container -LiteralPath:$workTree)){
         Write-Error "The specified work tree path '$workTree' does not exist."
         return
@@ -194,7 +204,7 @@ function Start-CodeDemo {
     $script:DemoState = $demoState
 }
 
-function Update-DemoState {
+function Update-CodeDemo {
     param(
         [switch] $PreviousCommit
     )
@@ -207,4 +217,9 @@ function Update-DemoState {
     else {
         $state.Next()
     }
+}
+
+function Stop-CodeDemo {
+    $state = $script:DemoState
+    git -C $state.RepositoryPath switch -f $state.OriginalBranch
 }
